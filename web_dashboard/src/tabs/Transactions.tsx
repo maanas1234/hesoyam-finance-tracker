@@ -6,11 +6,15 @@ import { colorFor } from '../lib/categories'
 const rupee = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
 const PAGE = 25
 
-export default function Transactions({ transactions }: { transactions: Transaction[] }) {
+export default function Transactions({ transactions, onDelete }: {
+  transactions: Transaction[]
+  onDelete: (id: string) => Promise<void>
+}) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [type, setType] = useState('all')
   const [page, setPage] = useState(0)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const categories = useMemo(() => {
     const set = new Set(transactions.map(t => t.category))
@@ -33,6 +37,13 @@ export default function Transactions({ transactions }: { transactions: Transacti
   function onSearch(v: string) { setSearch(v); setPage(0) }
   function onCategory(v: string) { setCategory(v); setPage(0) }
   function onType(v: string) { setType(v); setPage(0) }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this transaction?')) return
+    setDeleting(id)
+    await onDelete(id)
+    setDeleting(null)
+  }
 
   return (
     <div>
@@ -69,6 +80,7 @@ export default function Transactions({ transactions }: { transactions: Transacti
                   <th>Category</th>
                   <th>Bank</th>
                   <th>Amount</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -84,6 +96,16 @@ export default function Transactions({ transactions }: { transactions: Transacti
                     <td>{t.bank ?? '—'}</td>
                     <td className={`amount ${t.type}`}>
                       {t.type === 'debit' ? '−' : '+'}{rupee.format(t.amount)}
+                    </td>
+                    <td>
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDelete(t.id)}
+                        disabled={deleting === t.id}
+                        title="Delete"
+                      >
+                        {deleting === t.id ? '…' : '🗑'}
+                      </button>
                     </td>
                   </tr>
                 ))}

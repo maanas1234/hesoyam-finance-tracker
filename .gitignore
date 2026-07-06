@@ -16,3 +16,6 @@ web_dashboard/dist/
 # General
 .DS_Store
 Thumbs.db
+
+# Claude Code session data
+.claude/

@@ -31,6 +31,11 @@ export default function Dashboard() {
     setLoading(false)
   }
 
+  async function deleteTransaction(id: string) {
+    await supabase.from('transactions').delete().eq('id', id)
+    setTransactions(prev => prev.filter(t => t.id !== id))
+  }
+
   return (
     <div className="dashboard">
       <header className="dash-header">
@@ -61,7 +66,7 @@ export default function Dashboard() {
         <>
           {tab === 'overview'     && <Overview     transactions={transactions} />}
           {tab === 'analytics'    && <Analytics    transactions={transactions} />}
-          {tab === 'transactions' && <Transactions transactions={transactions} />}
+          {tab === 'transactions' && <Transactions transactions={transactions} onDelete={deleteTransaction} />}
         </>
       )}
     </div>
