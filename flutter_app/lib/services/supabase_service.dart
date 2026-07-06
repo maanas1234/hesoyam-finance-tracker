@@ -16,6 +16,10 @@ class SupabaseService {
     await _db.from('transactions').insert(txn.toMap());
   }
 
+  static Future<void> deleteTransaction(String id) async {
+    await _db.from('transactions').delete().eq('id', id);
+  }
+
   static Future<List<Transaction>> getAllForAnalytics() async {
     final since = DateTime.now().subtract(const Duration(days: 365));
     final rows = await _db

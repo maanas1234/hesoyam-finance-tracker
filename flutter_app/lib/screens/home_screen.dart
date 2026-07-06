@@ -125,6 +125,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (added) _load();
   }
 
+  Future<void> _deleteTxn(Transaction txn) async {
+    if (txn.id == null) return;
+    // Optimistically remove from list first
+    setState(() => _txns.remove(txn));
+    try {
+      await SupabaseService.deleteTransaction(txn.id!);
+    } catch (_) {
+      // Restore on failure
+      if (mounted) {
+        setState(() => _txns.insert(0, txn));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Delete failed. Try again.')),
+        );
+        return;
+      }
+    }
+    // Reload to get updated totals and widget
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,7 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           )
                         else
-                          ..._txns.map((t) => _TxnTile(txn: t)),
+                          ..._txns.map((t) => _TxnTile(
+                            txn: t,
+                            onDelete: () => _deleteTxn(t),
+                          )),
                       ],
                     ),
             ),
@@ -345,44 +368,75 @@ class _CategoryBars extends StatelessWidget {
 
 class _TxnTile extends StatelessWidget {
   final Transaction txn;
-  const _TxnTile({required this.txn});
+  final VoidCallback onDelete;
+  const _TxnTile({required this.txn, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     final isDebit = txn.type == 'debit';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade200),
+    return Dismissible(
+      key: ValueKey(txn.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.red.shade600,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: CircleAvatar(
-          radius: 18,
-          backgroundColor: isDebit
-              ? Colors.red.shade50
-              : Colors.green.shade50,
-          child: Icon(
-            isDebit ? Icons.arrow_upward : Icons.arrow_downward,
-            size: 16,
-            color: isDebit ? Colors.red : Colors.green,
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete transaction?'),
+            content: Text('Remove ${txn.merchant ?? txn.bank ?? 'this transaction'} for ${_rupee.format(txn.amount)}?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
+        ) ?? false;
+      },
+      onDismissed: (_) => onDelete(),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: Colors.grey.shade200),
         ),
-        title: Text(
-          txn.merchant ?? txn.bank ?? 'Unknown',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        subtitle: Text(
-          '${txn.category}  ·  ${_dateF.format(txn.transactionDate.toLocal())}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        trailing: Text(
-          '${isDebit ? '-' : '+'}${_rupee.format(txn.amount)}',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDebit ? Colors.red[700] : Colors.green[700],
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundColor: isDebit ? Colors.red.shade50 : Colors.green.shade50,
+            child: Icon(
+              isDebit ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 16,
+              color: isDebit ? Colors.red : Colors.green,
+            ),
+          ),
+          title: Text(
+            txn.merchant ?? txn.bank ?? 'Unknown',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(
+            '${txn.category}  ·  ${_dateF.format(txn.transactionDate.toLocal())}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          trailing: Text(
+            '${isDebit ? '-' : '+'}${_rupee.format(txn.amount)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isDebit ? Colors.red[700] : Colors.green[700],
+            ),
           ),
         ),
       ),
