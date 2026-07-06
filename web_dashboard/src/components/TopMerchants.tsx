@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
@@ -12,16 +13,36 @@ interface Props {
 }
 
 export default function TopMerchants({ data, onSelect }: Props) {
+  const [sort, setSort] = useState('amount-desc')
+
+  const sorted = useMemo(() => {
+    const list = [...data]
+    const [by, dir] = sort.split('-')
+    list.sort((a, b) => {
+      const cmp = by === 'name' ? a.name.localeCompare(b.name) : a.total - b.total
+      return dir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [data, sort])
+
   if (data.length === 0) return (
     <div className="card"><h2>Top Merchants</h2><p className="empty">No merchant data.</p></div>
   )
 
   return (
     <div className="card">
-      <h2>Top Merchants (All Time)</h2>
+      <div className="card-header">
+        <h2>Top Merchants</h2>
+        <select className="sort-select" value={sort} onChange={e => setSort(e.target.value)}>
+          <option value="amount-desc">Amount ↓</option>
+          <option value="amount-asc">Amount ↑</option>
+          <option value="name-asc">Name A→Z</option>
+          <option value="name-desc">Name Z→A</option>
+        </select>
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart
-          data={data}
+          data={sorted}
           layout="vertical"
           margin={{ top: 4, right: 60, left: 8, bottom: 4 }}
         >

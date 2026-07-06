@@ -10,6 +10,8 @@ final _monthKeyFmt = DateFormat('yyyy-MM');
 final _monthLabelFmt = DateFormat('MMMM yyyy');
 final _dateFmt = DateFormat('dd MMM, hh:mm a');
 
+enum _ASort { amountDesc, amountAsc, nameAsc, nameDesc }
+
 const _categoryColors = <String, Color>{
   'Food & Dining': Color(0xFFF97316),
   'Groceries':     Color(0xFF22C55E),
@@ -80,7 +82,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 }
 
-class _AnalyticsBody extends StatelessWidget {
+class _AnalyticsBody extends StatefulWidget {
   final List<Transaction> all;
   final List<Transaction> filtered;
   final bool isAllTime;
@@ -98,7 +100,29 @@ class _AnalyticsBody extends StatelessWidget {
   });
 
   @override
+  State<_AnalyticsBody> createState() => _AnalyticsBodyState();
+}
+
+class _AnalyticsBodyState extends State<_AnalyticsBody> {
+  _ASort _merchantSort = _ASort.amountDesc;
+  _ASort _catSort = _ASort.amountDesc;
+
+  List<MapEntry<String, double>> _sort(List<MapEntry<String, double>> list, _ASort s) {
+    final r = [...list];
+    switch (s) {
+      case _ASort.amountDesc: r.sort((a, b) => b.value.compareTo(a.value));
+      case _ASort.amountAsc:  r.sort((a, b) => a.value.compareTo(b.value));
+      case _ASort.nameAsc:    r.sort((a, b) => a.key.compareTo(b.key));
+      case _ASort.nameDesc:   r.sort((a, b) => b.key.compareTo(a.key));
+    }
+    return r;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final all = widget.all;
+    final filtered = widget.filtered;
+    final isAllTime = widget.isAllTime;
     final debits  = filtered.where((t) => t.type == 'debit').toList();
     final credits = filtered.where((t) => t.type == 'credit').toList();
     final totalSpent    = debits.fold(0.0,  (s, t) => s + t.amount);
@@ -121,11 +145,13 @@ class _AnalyticsBody extends StatelessWidget {
     for (final t in debits) {
       if (t.merchant != null) merchantMap[t.merchant!] = (merchantMap[t.merchant!] ?? 0) + t.amount;
     }
-    final topMerchants = (merchantMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+    final top8Merchants = (merchantMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+    final topMerchants = _sort(top8Merchants, _merchantSort);
 
     final catMap = <String, double>{};
     for (final t in debits) catMap[t.category] = (catMap[t.category] ?? 0) + t.amount;
-    final catList = (catMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+    final top8Cats = (catMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+    final catList = _sort(top8Cats, _catSort);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -136,17 +162,17 @@ class _AnalyticsBody extends StatelessWidget {
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
-                value: selectedMonthKey,
+                value: widget.selectedMonthKey,
                 isExpanded: true,
                 icon: const Icon(Icons.keyboard_arrow_down),
                 items: [
                   const DropdownMenuItem<String?>(value: null, child: Text('All Time')),
-                  ...monthKeys.map((k) => DropdownMenuItem<String?>(
+                  ...widget.monthKeys.map((k) => DropdownMenuItem<String?>(
                     value: k,
                     child: Text(_monthLabelFmt.format(DateTime.parse('$k-01'))),
                   )),
                 ],
-                onChanged: onMonthChanged,
+                onChanged: widget.onMonthChanged,
               ),
             ),
           ),
@@ -186,7 +212,10 @@ class _AnalyticsBody extends StatelessWidget {
 
         // ── Category pie ──────────────────────────────────────
         if (catList.isNotEmpty) ...[
-          _SectionTitle('By Category'),
+          Row(children: [
+            const Expanded(child: _SectionTitle('By Category')),
+            _ASortDropdown(value: _catSort, onChanged: (v) => setState(() => _catSort = v!)),
+          ]),
           const SizedBox(height: 12),
           _CategoryPie(
             catList: catList,
@@ -209,7 +238,10 @@ class _AnalyticsBody extends StatelessWidget {
 
         // ── Top merchants ─────────────────────────────────────
         if (topMerchants.isNotEmpty) ...[
-          _SectionTitle('Top Merchants'),
+          Row(children: [
+            const Expanded(child: _SectionTitle('Top Merchants')),
+            _ASortDropdown(value: _merchantSort, onChanged: (v) => setState(() => _merchantSort = v!)),
+          ]),
           const SizedBox(height: 12),
           ...topMerchants.map((e) => _HBar(
             label: e.key, value: e.value,
@@ -408,6 +440,31 @@ class _HBar extends StatelessWidget {
           ),
         ),
       ]),
+      ),
+    );
+  }
+}
+
+// ── Analytics sort dropdown ───────────────────────────────────────────────────
+
+class _ASortDropdown extends StatelessWidget {
+  final _ASort value;
+  final ValueChanged<_ASort?> onChanged;
+  const _ASortDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<_ASort>(
+        value: value,
+        isDense: true,
+        items: const [
+          DropdownMenuItem(value: _ASort.amountDesc, child: Text('Amount ↓', style: TextStyle(fontSize: 12))),
+          DropdownMenuItem(value: _ASort.amountAsc,  child: Text('Amount ↑', style: TextStyle(fontSize: 12))),
+          DropdownMenuItem(value: _ASort.nameAsc,    child: Text('Name A→Z', style: TextStyle(fontSize: 12))),
+          DropdownMenuItem(value: _ASort.nameDesc,   child: Text('Name Z→A', style: TextStyle(fontSize: 12))),
+        ],
+        onChanged: onChanged,
       ),
     );
   }

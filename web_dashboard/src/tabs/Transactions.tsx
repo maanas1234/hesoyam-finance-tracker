@@ -13,6 +13,7 @@ export default function Transactions({ transactions, onDelete }: {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
   const [type, setType] = useState('all')
+  const [sort, setSort] = useState('date-desc')
   const [page, setPage] = useState(0)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -31,12 +32,26 @@ export default function Transactions({ transactions, onDelete }: {
     })
   }, [transactions, search, category, type])
 
-  const totalPages = Math.ceil(filtered.length / PAGE)
-  const paged = filtered.slice(page * PAGE, (page + 1) * PAGE)
+  const sorted = useMemo(() => {
+    const list = [...filtered]
+    const [by, dir] = sort.split('-')
+    list.sort((a, b) => {
+      let cmp = 0
+      if (by === 'date')   cmp = a.transaction_date.localeCompare(b.transaction_date)
+      if (by === 'amount') cmp = a.amount - b.amount
+      if (by === 'name')   cmp = (a.merchant ?? a.bank ?? '').localeCompare(b.merchant ?? b.bank ?? '')
+      return dir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [filtered, sort])
+
+  const totalPages = Math.ceil(sorted.length / PAGE)
+  const paged = sorted.slice(page * PAGE, (page + 1) * PAGE)
 
   function onSearch(v: string) { setSearch(v); setPage(0) }
   function onCategory(v: string) { setCategory(v); setPage(0) }
   function onType(v: string) { setType(v); setPage(0) }
+  function onSort(v: string) { setSort(v); setPage(0) }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this transaction?')) return
@@ -63,7 +78,15 @@ export default function Transactions({ transactions, onDelete }: {
           <option value="debit">Debit</option>
           <option value="credit">Credit</option>
         </select>
-        <span className="filter-count">{filtered.length} transactions</span>
+        <select className="filter-select" value={sort} onChange={e => onSort(e.target.value)}>
+          <option value="date-desc">Date: Newest</option>
+          <option value="date-asc">Date: Oldest</option>
+          <option value="amount-desc">Amount: High → Low</option>
+          <option value="amount-asc">Amount: Low → High</option>
+          <option value="name-asc">Name: A → Z</option>
+          <option value="name-desc">Name: Z → A</option>
+        </select>
+        <span className="filter-count">{sorted.length} transactions</span>
       </div>
 
       {/* Table */}

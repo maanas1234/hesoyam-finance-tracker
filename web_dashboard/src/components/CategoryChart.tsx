@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell,
@@ -10,6 +11,18 @@ interface Props {
 }
 
 export default function CategoryChart({ data, onSelect }: Props) {
+  const [sort, setSort] = useState('amount-desc')
+
+  const sorted = useMemo(() => {
+    const list = [...data]
+    const [by, dir] = sort.split('-')
+    list.sort((a, b) => {
+      const cmp = by === 'name' ? a.category.localeCompare(b.category) : a.total - b.total
+      return dir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [data, sort])
+
   if (data.length === 0) return null
 
   const fmt = (v: number) =>
@@ -17,9 +30,17 @@ export default function CategoryChart({ data, onSelect }: Props) {
 
   return (
     <div className="card">
-      <h2>Spend by Category</h2>
+      <div className="card-header">
+        <h2>Spend by Category</h2>
+        <select className="sort-select" value={sort} onChange={e => setSort(e.target.value)}>
+          <option value="amount-desc">Amount ↓</option>
+          <option value="amount-asc">Amount ↑</option>
+          <option value="name-asc">Name A→Z</option>
+          <option value="name-desc">Name Z→A</option>
+        </select>
+      </div>
       <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 60 }}>
+        <BarChart data={sorted} margin={{ top: 8, right: 16, left: 8, bottom: 60 }}>
           <XAxis
             dataKey="category"
             tick={{ fontSize: 12 }}

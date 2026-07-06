@@ -11,6 +11,8 @@ import 'add_transaction_sheet.dart';
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _dateF = DateFormat('dd MMM, hh:mm a');
 
+enum _SortBy { date, amount, name }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,6 +28,27 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _syncMsg;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  _SortBy _sortBy = _SortBy.date;
+  bool _sortAsc = false;
+
+  List<Transaction> get _sorted {
+    final list = [..._txns];
+    list.sort((a, b) {
+      int cmp;
+      switch (_sortBy) {
+        case _SortBy.date:
+          cmp = a.transactionDate.compareTo(b.transactionDate);
+        case _SortBy.amount:
+          cmp = a.amount.compareTo(b.amount);
+        case _SortBy.name:
+          final na = (a.merchant ?? a.bank ?? '').toLowerCase();
+          final nb = (b.merchant ?? b.bank ?? '').toLowerCase();
+          cmp = na.compareTo(nb);
+      }
+      return _sortAsc ? cmp : -cmp;
+    });
+    return list;
+  }
 
   @override
   void initState() {
@@ -229,6 +252,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 20),
                         ],
                         _SectionHeader('Transactions'),
+                        const SizedBox(height: 6),
+                        _SortRow(
+                          sortBy: _sortBy,
+                          sortAsc: _sortAsc,
+                          onSort: (by, asc) => setState(() { _sortBy = by; _sortAsc = asc; }),
+                        ),
                         const SizedBox(height: 8),
                         if (_txns.isEmpty)
                           const Padding(
@@ -239,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           )
                         else
-                          ..._txns.map((t) => _TxnTile(
+                          ..._sorted.map((t) => _TxnTile(
                             txn: t,
                             onDelete: () => _deleteTxn(t),
                           )),
@@ -440,6 +469,57 @@ class _TxnTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SortRow extends StatelessWidget {
+  final _SortBy sortBy;
+  final bool sortAsc;
+  final void Function(_SortBy, bool) onSort;
+  const _SortRow({required this.sortBy, required this.sortAsc, required this.onSort});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: [
+        _SortChip('Date',   Icons.calendar_today,  _SortBy.date,   sortBy, sortAsc, onSort),
+        const SizedBox(width: 6),
+        _SortChip('Amount', Icons.attach_money,     _SortBy.amount, sortBy, sortAsc, onSort),
+        const SizedBox(width: 6),
+        _SortChip('Name',   Icons.sort_by_alpha,    _SortBy.name,   sortBy, sortAsc, onSort),
+      ]),
+    );
+  }
+}
+
+class _SortChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final _SortBy value;
+  final _SortBy current;
+  final bool asc;
+  final void Function(_SortBy, bool) onSort;
+  const _SortChip(this.label, this.icon, this.value, this.current, this.asc, this.onSort);
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = current == value;
+    final cs = Theme.of(context).colorScheme;
+    return ActionChip(
+      avatar: selected
+          ? Icon(asc ? Icons.arrow_upward : Icons.arrow_downward, size: 13,
+              color: cs.onPrimaryContainer)
+          : Icon(icon, size: 13, color: cs.onSurface.withOpacity(0.6)),
+      label: Text(label, style: TextStyle(
+        fontSize: 12,
+        color: selected ? cs.onPrimaryContainer : cs.onSurface,
+      )),
+      backgroundColor: selected ? cs.primaryContainer : null,
+      side: selected ? BorderSide.none : null,
+      onPressed: () => onSort(value, selected ? !asc : false),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
