@@ -17,9 +17,11 @@ class MainActivity : FlutterActivity() {
                 if (call.method == "update") {
                     val prefs = getSharedPreferences("FinanceWidgetPrefs", Context.MODE_PRIVATE)
                     prefs.edit()
-                        .putString("spent", call.argument<String>("spent") ?: "0")
-                        .putString("count", call.argument<String>("count") ?: "0")
-                        .putString("month", call.argument<String>("month") ?: "")
+                        .putString("spent",          call.argument<String>("spent")          ?: "0")
+                        .putString("count",          call.argument<String>("count")          ?: "0")
+                        .putString("received",       call.argument<String>("received")       ?: "0")
+                        .putString("received_count", call.argument<String>("received_count") ?: "0")
+                        .putString("month",          call.argument<String>("month")          ?: "")
                         .apply()
 
                     // Update widget directly — no broadcast needed
