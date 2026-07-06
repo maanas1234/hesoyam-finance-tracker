@@ -58,7 +58,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _boot() async {
     final granted = await SmsService.requestPermission();
     if (granted) {
-      final n = await SmsService.sync();
+      // Full sync if the local DB is empty (e.g. first launch after migrating from Supabase).
+      final existing = await DatabaseService.getTransactions();
+      final n = await SmsService.sync(fullSync: existing.isEmpty);
       if (n > 0 && mounted) {
         setState(() => _syncMsg = 'Synced $n new transaction${n == 1 ? '' : 's'}');
       }
