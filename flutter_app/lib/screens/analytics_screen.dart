@@ -1,0 +1,380 @@
+import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import '../models/transaction.dart';
+import '../services/supabase_service.dart';
+
+final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+final _monthFmt = DateFormat('MMM yy');
+final _monthKeyFmt = DateFormat('yyyy-MM');
+final _monthLabelFmt = DateFormat('MMMM yyyy');
+
+const _categoryColors = <String, Color>{
+  'Food & Dining': Color(0xFFF97316),
+  'Groceries':     Color(0xFF22C55E),
+  'Transport':     Color(0xFF3B82F6),
+  'Shopping':      Color(0xFFA855F7),
+  'Entertainment': Color(0xFFEC4899),
+  'Healthcare':    Color(0xFF14B8A6),
+  'Utilities':     Color(0xFF64748B),
+  'Recharge':      Color(0xFF0EA5E9),
+  'Finance':       Color(0xFFEF4444),
+  'Education':     Color(0xFFEAB308),
+  'Other':         Color(0xFF9CA3AF),
+};
+Color _colorFor(String cat) => _categoryColors[cat] ?? const Color(0xFF9CA3AF);
+
+class AnalyticsScreen extends StatefulWidget {
+  const AnalyticsScreen({super.key});
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  List<Transaction> _all = [];
+  bool _loading = true;
+  String? _selectedMonthKey; // null = all time, 'yyyy-MM' = specific month
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final txns = await SupabaseService.getAllForAnalytics();
+    if (mounted) setState(() { _all = txns; _loading = false; });
+  }
+
+  List<String> get _monthKeys {
+    final months = <String>{};
+    for (final t in _all) months.add(_monthKeyFmt.format(t.transactionDate));
+    return months.toList()..sort((a, b) => b.compareTo(a));
+  }
+
+  List<Transaction> get _filtered {
+    if (_selectedMonthKey == null) return _all;
+    return _all.where((t) => _monthKeyFmt.format(t.transactionDate) == _selectedMonthKey).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Analytics')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: _AnalyticsBody(
+                all: _all,
+                filtered: _filtered,
+                isAllTime: _selectedMonthKey == null,
+                monthKeys: _monthKeys,
+                selectedMonthKey: _selectedMonthKey,
+                onMonthChanged: (k) => setState(() => _selectedMonthKey = k),
+              ),
+            ),
+    );
+  }
+}
+
+class _AnalyticsBody extends StatelessWidget {
+  final List<Transaction> all;
+  final List<Transaction> filtered;
+  final bool isAllTime;
+  final List<String> monthKeys;
+  final String? selectedMonthKey;
+  final ValueChanged<String?> onMonthChanged;
+
+  const _AnalyticsBody({
+    required this.all,
+    required this.filtered,
+    required this.isAllTime,
+    required this.monthKeys,
+    required this.selectedMonthKey,
+    required this.onMonthChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final debits  = filtered.where((t) => t.type == 'debit').toList();
+    final credits = filtered.where((t) => t.type == 'credit').toList();
+    final totalSpent    = debits.fold(0.0,  (s, t) => s + t.amount);
+    final totalReceived = credits.fold(0.0, (s, t) => s + t.amount);
+
+    final now = DateTime.now();
+    final months6 = List.generate(6, (i) {
+      final d = DateTime(now.year, now.month - (5 - i));
+      return (label: _monthFmt.format(d), date: d);
+    });
+    final allDebits = all.where((t) => t.type == 'debit').toList();
+    final monthlyTotals = months6.map((m) {
+      final total = allDebits
+          .where((t) => t.transactionDate.year == m.date.year && t.transactionDate.month == m.date.month)
+          .fold(0.0, (s, t) => s + t.amount);
+      return (label: m.label, total: total);
+    }).toList();
+
+    final merchantMap = <String, double>{};
+    for (final t in debits) {
+      if (t.merchant != null) merchantMap[t.merchant!] = (merchantMap[t.merchant!] ?? 0) + t.amount;
+    }
+    final topMerchants = (merchantMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+
+    final catMap = <String, double>{};
+    for (final t in debits) catMap[t.category] = (catMap[t.category] ?? 0) + t.amount;
+    final catList = (catMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(8).toList();
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      children: [
+
+        // ── Month picker ──────────────────────────────────────
+        Row(children: [
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: selectedMonthKey,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('All Time')),
+                  ...monthKeys.map((k) => DropdownMenuItem<String?>(
+                    value: k,
+                    child: Text(_monthLabelFmt.format(DateTime.parse('$k-01'))),
+                  )),
+                ],
+                onChanged: onMonthChanged,
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+
+        // ── Summary cards ─────────────────────────────────────
+        Row(children: [
+          _StatCard('Spent',    _rupee.format(totalSpent),    '${debits.length} txns',
+              const Color(0xFFFFEBEE), Colors.red.shade700),
+          const SizedBox(width: 10),
+          _StatCard('Received', _rupee.format(totalReceived), '${credits.length} txns',
+              const Color(0xFFE8F5E9), Colors.green.shade700),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          _StatCard(
+            isAllTime ? 'Avg/Month' : 'Net',
+            isAllTime ? _rupee.format(totalSpent / 6) : _rupee.format(totalReceived - totalSpent),
+            isAllTime ? 'last 6 months' : 'this month',
+            const Color(0xFFE8EAF6), const Color(0xFF5C6BC0),
+          ),
+          const SizedBox(width: 10),
+          _StatCard('Transactions', '${filtered.length}', 'total',
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+              Theme.of(context).colorScheme.onSurface),
+        ]),
+        const SizedBox(height: 20),
+
+        // ── Monthly bar chart (always all-time for context) ───
+        if (isAllTime) ...[
+          _SectionTitle('Monthly Spend — Last 6 Months'),
+          const SizedBox(height: 12),
+          _MonthlyChart(monthlyTotals: monthlyTotals),
+          const SizedBox(height: 20),
+        ],
+
+        // ── Category pie ──────────────────────────────────────
+        if (catList.isNotEmpty) ...[
+          _SectionTitle('By Category'),
+          const SizedBox(height: 12),
+          _CategoryPie(catList: catList, totalSpent: totalSpent),
+          const SizedBox(height: 12),
+          ...catList.map((e) => _HBar(label: e.key, value: e.value, max: catList.first.value, color: _colorFor(e.key))),
+          const SizedBox(height: 20),
+        ],
+
+        // ── Top merchants ─────────────────────────────────────
+        if (topMerchants.isNotEmpty) ...[
+          _SectionTitle('Top Merchants'),
+          const SizedBox(height: 12),
+          ...topMerchants.map((e) => _HBar(
+                label: e.key, value: e.value,
+                max: topMerchants.first.value,
+                color: const Color(0xFF5C6BC0),
+              )),
+          const SizedBox(height: 20),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Reusable sub-widgets ──────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label, value, sub;
+  final Color bg, fg;
+  const _StatCard(this.label, this.value, this.sub, this.bg, this.fg);
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: TextStyle(fontSize: 11, color: fg.withOpacity(0.75))),
+          const SizedBox(height: 4),
+          Text(value,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: fg),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(sub, style: TextStyle(fontSize: 10, color: fg.withOpacity(0.6))),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14));
+}
+
+class _MonthlyChart extends StatelessWidget {
+  final List<({String label, double total})> monthlyTotals;
+  const _MonthlyChart({required this.monthlyTotals});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = monthlyTotals.map((m) => m.total).fold(0.0, (a, b) => a > b ? a : b);
+    if (maxY == 0) return const Text('No spending data yet.', style: TextStyle(color: Colors.grey));
+    final interval = (maxY / 4).ceilToDouble();
+    final cs = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 190,
+      child: BarChart(BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: maxY * 1.15,
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (g, gi, rod, ri) =>
+                BarTooltipItem(_rupee.format(rod.toY), const TextStyle(color: Colors.white, fontSize: 11)),
+          ),
+        ),
+        titlesData: FlTitlesData(
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(sideTitles: SideTitles(
+            showTitles: true,
+            getTitlesWidget: (v, _) {
+              final i = v.toInt();
+              if (i < 0 || i >= monthlyTotals.length) return const SizedBox.shrink();
+              return Padding(padding: const EdgeInsets.only(top: 4),
+                  child: Text(monthlyTotals[i].label, style: const TextStyle(fontSize: 10)));
+            },
+          )),
+          leftTitles: AxisTitles(sideTitles: SideTitles(
+            showTitles: true, reservedSize: 42, interval: interval,
+            getTitlesWidget: (v, _) =>
+                Text('₹${(v / 1000).toStringAsFixed(0)}k', style: const TextStyle(fontSize: 9)),
+          )),
+        ),
+        gridData: FlGridData(
+          show: true, horizontalInterval: interval, drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) => FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: monthlyTotals.asMap().entries.map((e) {
+          final isMax = e.value.total == maxY;
+          return BarChartGroupData(x: e.key, barRods: [
+            BarChartRodData(
+              toY: e.value.total,
+              color: isMax ? cs.primary : cs.primary.withOpacity(0.5),
+              width: 28,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            ),
+          ]);
+        }).toList(),
+      )),
+    );
+  }
+}
+
+class _CategoryPie extends StatelessWidget {
+  final List<MapEntry<String, double>> catList;
+  final double totalSpent;
+  const _CategoryPie({required this.catList, required this.totalSpent});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 170,
+      child: Row(children: [
+        Expanded(
+          child: PieChart(PieChartData(
+            sections: catList.map((e) {
+              final pct = totalSpent > 0 ? e.value / totalSpent * 100 : 0;
+              return PieChartSectionData(
+                value: e.value,
+                title: '${pct.toStringAsFixed(0)}%',
+                color: _colorFor(e.key),
+                radius: 52,
+                titleStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              );
+            }).toList(),
+            sectionsSpace: 2, centerSpaceRadius: 30,
+          )),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: catList.take(6).map((e) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(children: [
+              Container(width: 9, height: 9,
+                  decoration: BoxDecoration(color: _colorFor(e.key), shape: BoxShape.circle)),
+              const SizedBox(width: 5),
+              Text(e.key, style: const TextStyle(fontSize: 11)),
+            ]),
+          )).toList(),
+        ),
+      ]),
+    );
+  }
+}
+
+class _HBar extends StatelessWidget {
+  final String label;
+  final double value, max;
+  final Color color;
+  const _HBar({required this.label, required this.value, required this.max, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Flexible(child: Text(label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
+          Text(_rupee.format(value), style: const TextStyle(fontSize: 12)),
+        ]),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: (max > 0 ? value / max : 0.0).clamp(0.0, 1.0),
+            minHeight: 6,
+            backgroundColor: Colors.grey.shade100,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ]),
+    );
+  }
+}

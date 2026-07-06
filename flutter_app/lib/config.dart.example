@@ -1,0 +1,4 @@
+class AppConfig {
+  static const supabaseUrl = 'YOUR_SUPABASE_PROJECT_URL';
+  static const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+}
