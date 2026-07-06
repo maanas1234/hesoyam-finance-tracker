@@ -9,8 +9,11 @@ import CategoryChart from '../components/CategoryChart'
 
 const rupee = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
 
+interface DrillDown { title: string; txns: Transaction[] }
+
 export default function Analytics({ transactions }: { transactions: Transaction[] }) {
   const [monthFilter, setMonthFilter] = useState<string>('all')
+  const [drill, setDrill] = useState<DrillDown | null>(null)
 
   // Build dropdown options from actual transaction dates
   const monthOptions = useMemo(() => {
@@ -86,6 +89,13 @@ export default function Analytics({ transactions }: { transactions: Transaction[
   const totalSpent    = debits.reduce((s, t) => s + t.amount, 0)
   const totalReceived = credits.reduce((s, t) => s + t.amount, 0)
 
+  function drillMerchant(name: string) {
+    setDrill({ title: name, txns: debits.filter(t => t.merchant === name) })
+  }
+  function drillCategory(name: string) {
+    setDrill({ title: name, txns: debits.filter(t => t.category === name) })
+  }
+
   return (
     <div>
       {/* Month selector */}
@@ -137,14 +147,40 @@ export default function Analytics({ transactions }: { transactions: Transaction[
       {/* Month view: category bar chart instead of pie */}
       {isAllTime ? (
         <div className="two-col">
-          <TopMerchants data={topMerchants} />
-          <CategoryPie data={categoryData} />
+          <TopMerchants data={topMerchants} onSelect={drillMerchant} />
+          <CategoryPie data={categoryData} onSelect={drillCategory} />
         </div>
       ) : (
         <>
-          <CategoryChart data={categoryBarData} />
-          <TopMerchants data={topMerchants} />
+          <CategoryChart data={categoryBarData} onSelect={drillCategory} />
+          <TopMerchants data={topMerchants} onSelect={drillMerchant} />
         </>
+      )}
+
+      {/* Drill-down modal */}
+      {drill && (
+        <div className="drill-overlay" onClick={() => setDrill(null)}>
+          <div className="drill-modal" onClick={e => e.stopPropagation()}>
+            <div className="drill-header">
+              <div>
+                <h3 className="drill-title">{drill.title}</h3>
+                <span className="drill-sub">
+                  {rupee.format(drill.txns.reduce((s, t) => s + t.amount, 0))} · {drill.txns.length} txns
+                </span>
+              </div>
+              <button className="drill-close" onClick={() => setDrill(null)}>✕</button>
+            </div>
+            <div className="drill-list">
+              {drill.txns.map(t => (
+                <div key={t.id} className="drill-txn">
+                  <span className="drill-merchant">{t.merchant ?? t.bank ?? 'Unknown'}</span>
+                  <span className="drill-date">{format(parseISO(t.transaction_date), 'dd MMM yy, h:mm a')}</span>
+                  <span className="drill-amount debit">{rupee.format(t.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

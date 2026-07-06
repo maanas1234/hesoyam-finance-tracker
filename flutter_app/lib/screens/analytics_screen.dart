@@ -8,6 +8,7 @@ final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigi
 final _monthFmt = DateFormat('MMM yy');
 final _monthKeyFmt = DateFormat('yyyy-MM');
 final _monthLabelFmt = DateFormat('MMMM yyyy');
+final _dateFmt = DateFormat('dd MMM, hh:mm a');
 
 const _categoryColors = <String, Color>{
   'Food & Dining': Color(0xFFF97316),
@@ -187,9 +188,22 @@ class _AnalyticsBody extends StatelessWidget {
         if (catList.isNotEmpty) ...[
           _SectionTitle('By Category'),
           const SizedBox(height: 12),
-          _CategoryPie(catList: catList, totalSpent: totalSpent),
+          _CategoryPie(
+            catList: catList,
+            totalSpent: totalSpent,
+            onCategoryTap: (cat) => _showTxnSheet(
+              context, cat,
+              debits.where((t) => t.category == cat).toList(),
+            ),
+          ),
           const SizedBox(height: 12),
-          ...catList.map((e) => _HBar(label: e.key, value: e.value, max: catList.first.value, color: _colorFor(e.key))),
+          ...catList.map((e) => _HBar(
+            label: e.key, value: e.value, max: catList.first.value, color: _colorFor(e.key),
+            onTap: () => _showTxnSheet(
+              context, e.key,
+              debits.where((t) => t.category == e.key).toList(),
+            ),
+          )),
           const SizedBox(height: 20),
         ],
 
@@ -198,10 +212,14 @@ class _AnalyticsBody extends StatelessWidget {
           _SectionTitle('Top Merchants'),
           const SizedBox(height: 12),
           ...topMerchants.map((e) => _HBar(
-                label: e.key, value: e.value,
-                max: topMerchants.first.value,
-                color: const Color(0xFF5C6BC0),
-              )),
+            label: e.key, value: e.value,
+            max: topMerchants.first.value,
+            color: const Color(0xFF5C6BC0),
+            onTap: () => _showTxnSheet(
+              context, e.key,
+              debits.where((t) => t.merchant == e.key).toList(),
+            ),
+          )),
           const SizedBox(height: 20),
         ],
       ],
@@ -307,7 +325,8 @@ class _MonthlyChart extends StatelessWidget {
 class _CategoryPie extends StatelessWidget {
   final List<MapEntry<String, double>> catList;
   final double totalSpent;
-  const _CategoryPie({required this.catList, required this.totalSpent});
+  final void Function(String category)? onCategoryTap;
+  const _CategoryPie({required this.catList, required this.totalSpent, this.onCategoryTap});
 
   @override
   Widget build(BuildContext context) {
@@ -316,6 +335,16 @@ class _CategoryPie extends StatelessWidget {
       child: Row(children: [
         Expanded(
           child: PieChart(PieChartData(
+            pieTouchData: PieTouchData(
+              touchCallback: (FlTouchEvent event, PieTouchResponse? response) {
+                if (event is FlTapUpEvent && onCategoryTap != null) {
+                  final idx = response?.touchedSection?.touchedSectionIndex;
+                  if (idx != null && idx >= 0 && idx < catList.length) {
+                    onCategoryTap!(catList[idx].key);
+                  }
+                }
+              },
+            ),
             sections: catList.map((e) {
               final pct = totalSpent > 0 ? e.value / totalSpent * 100 : 0;
               return PieChartSectionData(
@@ -352,11 +381,15 @@ class _HBar extends StatelessWidget {
   final String label;
   final double value, max;
   final Color color;
-  const _HBar({required this.label, required this.value, required this.max, required this.color});
+  final VoidCallback? onTap;
+  const _HBar({required this.label, required this.value, required this.max, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -375,6 +408,92 @@ class _HBar extends StatelessWidget {
           ),
         ),
       ]),
+      ),
+    );
+  }
+}
+
+// ── Transaction drill-down sheet ─────────────────────────────────────────────
+
+void _showTxnSheet(BuildContext context, String title, List<Transaction> txns) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) => _TxnListSheet(title: title, txns: txns),
+  );
+}
+
+class _TxnListSheet extends StatelessWidget {
+  final String title;
+  final List<Transaction> txns;
+  const _TxnListSheet({required this.title, required this.txns});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = txns.where((t) => t.type == 'debit').fold(0.0, (s, t) => s + t.amount);
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 8, bottom: 4),
+            width: 36, height: 4,
+            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Row(children: [
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+              if (total > 0) Text(
+                _rupee.format(total),
+                style: TextStyle(fontSize: 14, color: Colors.red[700], fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 8),
+              Text('${txns.length} txns', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            ]),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: txns.isEmpty
+                ? const Center(child: Text('No transactions'))
+                : ListView.builder(
+                    controller: controller,
+                    itemCount: txns.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemBuilder: (_, i) {
+                      final t = txns[i];
+                      final isDebit = t.type == 'debit';
+                      return ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: isDebit ? Colors.red.shade50 : Colors.green.shade50,
+                          child: Icon(isDebit ? Icons.arrow_upward : Icons.arrow_downward,
+                              size: 14, color: isDebit ? Colors.red : Colors.green),
+                        ),
+                        title: Text(t.merchant ?? t.bank ?? 'Unknown', style: const TextStyle(fontSize: 13)),
+                        subtitle: Text(_dateFmt.format(t.transactionDate.toLocal()),
+                            style: const TextStyle(fontSize: 11)),
+                        trailing: Text(
+                          '${isDebit ? '−' : '+'}${_rupee.format(t.amount)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13,
+                            color: isDebit ? Colors.red[700] : Colors.green[700],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

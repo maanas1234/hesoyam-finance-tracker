@@ -6,9 +6,10 @@ import { colorFor } from '../lib/categories'
 
 interface Props {
   data: { category: string; total: number }[]
+  onSelect?: (name: string) => void
 }
 
-export default function CategoryChart({ data }: Props) {
+export default function CategoryChart({ data, onSelect }: Props) {
   if (data.length === 0) return null
 
   const fmt = (v: number) =>
@@ -28,7 +29,8 @@ export default function CategoryChart({ data }: Props) {
           />
           <YAxis tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
           <Tooltip formatter={(v) => [fmt(Number(v)), 'Spent']} />
-          <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="total" radius={[4, 4, 0, 0]} cursor={onSelect ? 'pointer' : undefined}
+            onClick={onSelect ? (d: any) => d?.category && onSelect(d.category) : undefined}>
             {data.map(entry => (
               <Cell key={entry.category} fill={colorFor(entry.category)} />
             ))}

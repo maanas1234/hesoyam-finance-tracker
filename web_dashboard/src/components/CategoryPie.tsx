@@ -5,9 +5,10 @@ const rupee = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR
 
 interface Props {
   data: { name: string; value: number }[]
+  onSelect?: (name: string) => void
 }
 
-export default function CategoryPie({ data }: Props) {
+export default function CategoryPie({ data, onSelect }: Props) {
   if (data.length === 0) return (
     <div className="card"><h2>By Category</h2><p className="empty">No data.</p></div>
   )
@@ -30,6 +31,8 @@ export default function CategoryPie({ data }: Props) {
             paddingAngle={2}
             label={({ value }) => `${((value / total) * 100).toFixed(0)}%`}
             labelLine={false}
+            cursor={onSelect ? 'pointer' : undefined}
+            onClick={onSelect ? (d: any) => d?.name && onSelect(d.name) : undefined}
           >
             {data.map(d => <Cell key={d.name} fill={colorFor(d.name)} />)}
           </Pie>

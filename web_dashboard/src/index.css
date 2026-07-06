@@ -306,6 +306,67 @@ body { background: var(--bg); color: var(--text); }
   white-space: nowrap;
 }
 
+/* Drill-down modal */
+.drill-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 0 0 0 0;
+}
+@media (min-width: 600px) {
+  .drill-overlay { align-items: center; padding: 24px; }
+}
+.drill-modal {
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (min-width: 600px) {
+  .drill-modal { border-radius: 16px; }
+}
+.drill-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.drill-title { font-size: 1rem; font-weight: 700; margin: 0; }
+.drill-sub { font-size: 0.8rem; color: var(--muted); }
+.drill-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 4px;
+  line-height: 1;
+}
+.drill-list { overflow-y: auto; padding: 8px 0; }
+.drill-txn {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.drill-txn:last-child { border-bottom: none; }
+.drill-merchant { font-size: 0.875rem; font-weight: 500; }
+.drill-date { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.drill-amount { font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
+.drill-amount.debit { color: var(--red); }
+.drill-amount.credit { color: var(--green); }
+
 /* Delete button in transaction table */
 .delete-btn {
   background: none;
