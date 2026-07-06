@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart' show themeNotifier, toggleTheme;
 import '../models/transaction.dart';
 import '../services/sms_service.dart';
-import '../services/supabase_service.dart';
+import '../services/database_service.dart';
 import 'add_transaction_sheet.dart';
 
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -97,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loading = true);
     final monthStart = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
     final monthEnd = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1);
-    final txns = await SupabaseService.getTransactions(from: monthStart, to: monthEnd);
+    final txns = await DatabaseService.getTransactions(from: monthStart, to: monthEnd);
 
     double spent = 0;
     double received = 0;
@@ -153,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Optimistically remove from list first
     setState(() => _txns.remove(txn));
     try {
-      await SupabaseService.deleteTransaction(txn.id!);
+      await DatabaseService.deleteTransaction(txn.id!);
     } catch (_) {
       // Restore on failure
       if (mounted) {
@@ -181,11 +180,6 @@ class _HomeScreenState extends State<HomeScreen> {
               tooltip: 'Toggle theme',
               onPressed: toggleTheme,
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () => Supabase.instance.client.auth.signOut(),
           ),
         ],
       ),

@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'config.dart';
 import 'screens/main_screen.dart';
-import 'screens/login_screen.dart';
 
 final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 
@@ -16,7 +13,6 @@ Future<void> toggleTheme() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: AppConfig.supabaseUrl, anonKey: AppConfig.supabaseAnonKey);
   final prefs = await SharedPreferences.getInstance();
   if (prefs.getBool('darkMode') ?? false) themeNotifier.value = ThemeMode.dark;
   runApp(const FinanceTrackerApp());
@@ -44,23 +40,8 @@ class FinanceTrackerApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const _AuthGate(),
+        home: const MainScreen(),
       ),
-    );
-  }
-}
-
-class _AuthGate extends StatelessWidget {
-  const _AuthGate();
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = snapshot.data?.session;
-        return session != null ? const MainScreen() : const LoginScreen();
-      },
     );
   }
 }

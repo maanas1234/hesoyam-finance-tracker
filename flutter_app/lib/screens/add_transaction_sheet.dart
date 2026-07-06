@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/transaction.dart';
-import '../services/supabase_service.dart';
+import '../services/database_service.dart';
 
 const _categories = [
   'Food & Dining', 'Groceries', 'Transport', 'Shopping',
@@ -60,9 +59,7 @@ class _AddSheetState extends State<_AddSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final userId = Supabase.instance.client.auth.currentUser!.id;
     final txn = Transaction(
-      userId: userId,
       amount: double.parse(_amountCtrl.text.trim()),
       type: _type,
       merchant: _merchantCtrl.text.trim().isEmpty ? null : _merchantCtrl.text.trim(),
@@ -73,7 +70,7 @@ class _AddSheetState extends State<_AddSheet> {
     );
 
     try {
-      await SupabaseService.insertManual(txn);
+      await DatabaseService.insertManual(txn);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {

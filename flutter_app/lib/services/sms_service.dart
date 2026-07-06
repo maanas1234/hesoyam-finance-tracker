@@ -3,10 +3,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'sms_parser.dart';
 import 'categorizer.dart';
-import 'supabase_service.dart';
+import 'database_service.dart';
 import '../models/transaction.dart';
 
 class SmsService {
@@ -19,9 +18,6 @@ class SmsService {
 
   // Returns number of new transactions synced.
   static Future<int> sync({bool fullSync = false}) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return 0;
-
     final prefs = await SharedPreferences.getInstance();
     final lastMs = prefs.getInt(_lastSyncKey);
 
@@ -50,8 +46,7 @@ class SmsService {
           .convert(utf8.encode('$body${date.millisecondsSinceEpoch}'))
           .toString();
 
-      await SupabaseService.upsertTransaction(Transaction(
-        userId: userId,
+      await DatabaseService.upsertTransaction(Transaction(
         amount: parsed.amount,
         type: parsed.type,
         merchant: parsed.merchant,

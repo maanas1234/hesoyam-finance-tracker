@@ -1,6 +1,5 @@
 class Transaction {
   final String? id;
-  final String userId;
   final double amount;
   final String type; // 'debit' | 'credit'
   final String? merchant;
@@ -12,7 +11,6 @@ class Transaction {
 
   const Transaction({
     this.id,
-    required this.userId,
     required this.amount,
     required this.type,
     this.merchant,
@@ -23,21 +21,8 @@ class Transaction {
     this.smsHash,
   });
 
-  Map<String, dynamic> toMap() => {
-        'user_id': userId,
-        'amount': amount,
-        'type': type,
-        'merchant': merchant,
-        'category': category,
-        'bank': bank,
-        'raw_sms': rawSms,
-        'transaction_date': transactionDate.toIso8601String(),
-        'sms_hash': smsHash,
-      };
-
   factory Transaction.fromMap(Map<String, dynamic> map) => Transaction(
         id: map['id'] as String?,
-        userId: map['user_id'] as String,
         amount: (map['amount'] as num).toDouble(),
         type: map['type'] as String,
         merchant: map['merchant'] as String?,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
-import '../services/supabase_service.dart';
+import '../services/database_service.dart';
 
 final _rupee = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _monthFmt = DateFormat('MMM yy');
@@ -46,7 +46,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final txns = await SupabaseService.getAllForAnalytics();
+    final txns = await DatabaseService.getAllForAnalytics();
     if (mounted) setState(() { _all = txns; _loading = false; });
   }
 
